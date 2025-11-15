@@ -177,6 +177,8 @@
   </style>
 </head>
 
+
+
 <body>
   <div class="app">
     <h1>Group Timer</h1>
@@ -214,6 +216,24 @@
     startSound.volume = 1.0;
     stopSound.volume = 1.0;
 
+    // Some mobile browsers block audio unless each element is "touched"
+    // once inside a user gesture. This unlocks them.
+    let audioUnlocked = false;
+
+    function unlockAudio() {
+      if (audioUnlocked) return;
+      audioUnlocked = true;
+
+      [startSound, stopSound].forEach(sound => {
+        sound.play().then(() => {
+          sound.pause();
+          sound.currentTime = 0;
+        }).catch(() => {
+          // Ignore errors – this is just to unlock audio
+        });
+      });
+    }
+
     function playStart() {
       startSound.currentTime = 0;
       startSound.play().catch(() => { });
@@ -223,6 +243,7 @@
       stopSound.currentTime = 0;
       stopSound.play().catch(() => { });
     }
+
 
     // -------- DOM elements --------
     const intervalInput = document.getElementById("intervalSeconds");
@@ -355,6 +376,9 @@
     }
 
     startBtn.addEventListener("click", () => {
+      // First tap: unlock both audio elements for mobile browsers
+      unlockAudio();
+
       if (timerId === null) {
         startTimer();
       } else {
