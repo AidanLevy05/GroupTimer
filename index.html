@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Group Interval Timer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #111;
+      color: #eee;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      background: #1b1b1b;
+      border-radius: 10px;
+      padding: 20px 24px 30px;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 0 18px rgba(0, 0, 0, 0.6);
+      border: 1px solid #333;
+    }
+    h1 {
+      font-size: 1.4rem;
+      margin: 0 0 16px;
+      text-align: center;
+    }
+    .field {
+      margin-bottom: 12px;
+    }
+    label {
+      display: block;
+      font-size: 0.9rem;
+      margin-bottom: 4px;
+    }
+    input[type="number"],
+    input[type="text"] {
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid #444;
+      background: #111;
+      color: #eee;
+      font-size: 0.95rem;
+      box-sizing: border-box;
+    }
+    input[type="number"]:focus,
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #4caf50;
+    }
+    .buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    button {
+      flex: 1;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: none;
+      font-size: 0.95rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button#startBtn {
+      background: #4caf50;
+      color: #fff;
+    }
+    button#stopBtn {
+      background: #b71c1c;
+      color: #fff;
+    }
+    button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+    .status {
+      margin-top: 18px;
+      padding: 10px;
+      border-radius: 6px;
+      background: #121212;
+      border: 1px solid #333;
+      font-size: 0.95rem;
+    }
+    .status-line {
+      margin-bottom: 4px;
+    }
+    .status-line span.label {
+      color: #aaa;
+    }
+    .status-line span.value {
+      font-weight: 600;
+    }
+    .warning {
+      margin-top: 8px;
+      font-size: 0.8rem;
+      color: #f5a623;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Group A / Group B Interval Timer</h1>
+
+    <div class="field">
+      <label for="intervalSeconds">Interval length (seconds between calls):</label>
+      <input type="number" id="intervalSeconds" min="1" value="30">
+    </div>
+
+    <div class="field">
+      <label for="repetitions">Number of repetitions (A+B cycles):</label>
+      <input type="number" id="repetitions" min="1" value="10">
+    </div>
+
+    <div class="field">
+      <label for="groupALabel">Group A label (what to say):</label>
+      <input type="text" id="groupALabel" value="Group A start">
+    </div>
+
+    <div class="field">
+      <label for="groupBLabel">Group B label (what to say):</label>
+      <input type="text" id="groupBLabel" value="Group B start">
+    </div>
+
+    <div class="buttons">
+      <button id="startBtn">Start</button>
+      <button id="stopBtn" disabled>Stop</button>
+    </div>
+
+    <div class="status" id="statusBox">
+      <div class="status-line">
+        <span class="label">State: </span>
+        <span class="value" id="stateText">Idle</span>
+      </div>
+      <div class="status-line">
+        <span class="label">Current group: </span>
+        <span class="value" id="groupText">–</span>
+      </div>
+      <div class="status-line">
+        <span class="label">Repetition: </span>
+        <span class="value" id="repText">0 / 0</span>
+      </div>
+      <div class="status-line">
+        <span class="label">Next call in: </span>
+        <span class="value" id="nextText">–</span>
+      </div>
+    </div>
+
+    <div class="warning">
+      Note: Audio will only work after you click "Start" (browser auto-play rules).
+    </div>
+  </div>
+
+  <script>
+    const intervalInput = document.getElementById('intervalSeconds');
+    const repsInput = document.getElementById('repetitions');
+    const groupAInput = document.getElementById('groupALabel');
+    const groupBInput = document.getElementById('groupBLabel');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+
+    const stateText = document.getElementById('stateText');
+    const groupText = document.getElementById('groupText');
+    const repText = document.getElementById('repText');
+    const nextText = document.getElementById('nextText');
+
+    let timerState = {
+      running: false,
+      currentGroup: 'A',   // 'A' or 'B'
+      currentRep: 0,       // 1..numReps
+      numReps: 0,
+      intervalMs: 0,
+      timeoutId: null
+    };
+
+    function speak(text) {
+      if (!('speechSynthesis' in window)) {
+        console.warn('Speech synthesis not supported in this browser.');
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function setUIState(running) {
+      timerState.running = running;
+      startBtn.disabled = running;
+      stopBtn.disabled = !running;
+      intervalInput.disabled = running;
+      repsInput.disabled = running;
+      groupAInput.disabled = running;
+      groupBInput.disabled = running;
+      stateText.textContent = running ? 'Running' : 'Idle';
+      if (!running) {
+        nextText.textContent = '–';
+      }
+    }
+
+    function updateStatus() {
+      groupText.textContent = timerState.running ? timerState.currentGroup : '–';
+      repText.textContent = timerState.numReps === 0
+        ? '0 / 0'
+        : timerState.currentRep + ' / ' + timerState.numReps;
+    }
+
+    function clearFuture() {
+      if (timerState.timeoutId !== null) {
+        clearTimeout(timerState.timeoutId);
+        timerState.timeoutId = null;
+      }
+    }
+
+    function stopTimer() {
+      clearFuture();
+      setUIState(false);
+      timerState.currentGroup = 'A';
+      timerState.currentRep = 0;
+      updateStatus();
+    }
+
+    function scheduleNext(nextFn, delayMs) {
+      clearFuture();
+      nextText.textContent = (delayMs / 1000).toFixed(1) + ' s';
+      timerState.timeoutId = setTimeout(nextFn, delayMs);
+    }
+
+    function runStep(group, rep) {
+      if (!timerState.running) return;
+
+      timerState.currentGroup = group;
+      timerState.currentRep = rep;
+      updateStatus();
+
+      const label = group === 'A'
+        ? (groupAInput.value || 'Group A start')
+        : (groupBInput.value || 'Group B start');
+
+      speak(label);
+
+      const interval = timerState.intervalMs;
+
+      if (group === 'A') {
+        // Next: same repetition, group B
+        scheduleNext(() => runStep('B', rep), interval);
+      } else {
+        // group B just fired
+        if (rep >= timerState.numReps) {
+          // Done
+          stopTimer();
+          stateText.textContent = 'Finished';
+          return;
+        }
+        // Next: new repetition, group A
+        scheduleNext(() => runStep('A', rep + 1), interval);
+      }
+    }
+
+    startBtn.addEventListener('click', () => {
+      const intervalSec = Number(intervalInput.value);
+      const numReps = Number(repsInput.value);
+
+      if (!Number.isFinite(intervalSec) || intervalSec <= 0) {
+        alert('Interval must be a positive number of seconds.');
+        return;
+      }
+      if (!Number.isInteger(numReps) || numReps <= 0) {
+        alert('Repetitions must be a positive integer.');
+        return;
+      }
+
+      timerState.intervalMs = intervalSec * 1000;
+      timerState.numReps = numReps;
+      timerState.currentGroup = 'A';
+      timerState.currentRep = 0;
+
+      setUIState(true);
+      updateStatus();
+
+      // Kick off immediately with Group A
+      runStep('A', 1);
+    });
+
+    stopBtn.addEventListener('click', () => {
+      stopTimer();
+    });
+
+    // Initialize
+    updateStatus();
+  </script>
+</body>
+</html>
